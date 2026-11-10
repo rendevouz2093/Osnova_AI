@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Kazakh Fairy Tale Adventure</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --gold: #fbbf24;
+            --gold-dark: #d97706;
+            --accent: #3b82f6;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            background-image: radial-gradient(circle at top, #1e293b 0%, #0f172a 100%);
+            min-height: 100vh;
+        }
+
+        h1, h2, h3, .fairy-font {
+            font-family: 'Cinzel', serif;
+            color: var(--gold);
+        }
+
+        /* Tabs styling */
+        .tab-btn {
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-btn.active {
+            color: var(--gold);
+            border-bottom: 2px solid var(--gold);
+            background-color: rgba(251, 191, 36, 0.1);
+        }
+
+        /* A* Grid Styling */
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 2px;
+            background-color: #334155;
+            border: 2px solid var(--gold-dark);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .cell {
+            aspect-ratio: 1;
+            background-color: #1e293b;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .cell:hover { background-color: #475569; }
+        .cell.wall { background-color: #0f172a; background-image: repeating-linear-gradient(45deg, #1e293b 25%, transparent 25%, transparent 75%, #1e293b 75%, #1e293b), repeating-linear-gradient(45deg, #1e293b 25%, #0f172a 25%, #0f172a 75%, #1e293b 75%, #1e293b); background-position: 0 0, 10px 10px; background-size: 20px 20px; box-shadow: inset 0 0 5px rgba(0,0,0,0.8); }
+        .cell.start { background-color: #3b82f6; box-shadow: inset 0 0 10px #60a5fa; }
+        .cell.end { background-color: #ef4444; box-shadow: inset 0 0 10px #f87171; }
+        .cell.path { background-color: var(--gold); animation: pulse-gold 1.5s infinite; }
+        .cell.searched { background-color: #334155; }
+
+        @keyframes pulse-gold {
+            0% { background-color: #fbbf24; transform: scale(1); }
+            50% { background-color: #f59e0b; transform: scale(0.9); }
+            100% { background-color: #fbbf24; transform: scale(1); }
+        }
+
+        /* Battle UI Styling */
+        .hp-bar-container {
+            background-color: #334155;
+            border-radius: 999px;
+            overflow: hidden;
+            height: 20px;
+            width: 100%;
+            border: 1px solid #475569;
+        }
+        .hp-bar {
+            height: 100%;
+            transition: width 0.4s ease-in-out;
+        }
+        .hp-player { background: linear-gradient(90deg, #16a34a, #22c55e); }
+        .hp-dragon { background: linear-gradient(90deg, #991b1b, #dc2626); }
+        .battle-log {
+            scrollbar-width: thin;
+            scrollbar-color: var(--gold-dark) #1e293b;
+        }
+        
+        .action-btn {
+            background: linear-gradient(180deg, #1e293b, #0f172a);
+            border: 1px solid var(--gold-dark);
+            color: #e2e8f0;
+            transition: all 0.2s;
+        }
+        .action-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(251, 191, 36, 0.2);
+            border-color: var(--gold);
+        }
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Chat Styling */
+        .chat-bubble-user {
+            background-color: #1e3a8a;
+            border-radius: 16px 16px 0 16px;
+            border-bottom: 2px solid #3b82f6;
+        }
+        .chat-bubble-ai {
+            background-color: #451a03;
+            border-radius: 16px 16px 16px 0;
+            border-bottom: 2px solid var(--gold-dark);
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: var(--gold);
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        /* General Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+    </style>
+</head>
+<body class="p-4 sm:p-8 flex flex-col items-center">
+
+    <!-- Header -->
+    <div class="text-center mb-8 w-full max-w-4xl">
+        <h1 class="text-3xl md:text-5xl font-bold mb-2 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-700 drop-shadow-lg">
+            Ер Төстік: AI Шытырман Оқиғасы
+        </h1>
+        <p class="text-sm md:text-base text-gray-400">QAIRU Final Project: A*, Minimax & LLM</p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex flex-wrap justify-center w-full max-w-4xl mb-6 bg-slate-800 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
+        <button onclick="switchTab('nav-tab')" id="btn-nav-tab" class="tab-btn active flex-1 py-3 px-4 text-sm font-semibold hover:bg-slate-700">
+            🧭 Жер асты жолы (A*)
+        </button>
+        <button onclick="switchTab('battle-tab')" id="btn-battle-tab" class="tab-btn flex-1 py-3 px-4 text-sm font-semibold hover:bg-slate-700">
+            ⚔️ Айдаһармен шайқас (Minimax)
+        </button>
+        <button onclick="switchTab('chat-tab')" id="btn-chat-tab" class="tab-btn flex-1 py-3 px-4 text-sm font-semibold hover:bg-slate-700">
+            🧙‍♂️ Дана қария (LLM)
+        </button>
+    </div>
+
+    <!-- Main Content Container -->
+    <div class="w-full max-w-4xl bg-slate-800/80 backdrop-blur-sm border border-slate-700 rounded-xl p-6 shadow-2xl relative min-h-[500px]">
+        
+        <!-- ==================== TAB 1: A* NAVIGATION ==================== -->
+        <div id="nav-tab" class="tab-content flex flex-col md:flex-row gap-8 items-center md:items-start">
+            <div class="flex-1 w-full max-w-md">
+                <h2 class="text-2xl mb-4 text-center md:text-left">Жер асты патшалығының лабиринті</h2>
+                <p class="text-sm text-gray-300 mb-6 leading-relaxed">
+                    Ер Төстікке Жер асты патшалығынан шығуға көмектесіңіз. Бастапқы (көк) және соңғы (қызыл) нүктелерді қойып, кедергілер (қара) сызыңыз. 
+                    <span class="text-yellow-400 font-bold">A* алгоритмі</span> ең қысқа жолды табады.
+                </p>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-gray-300">Құралды таңдаңыз:</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="setBrush('start')" id="brush-start" class="action-btn py-2 px-3 rounded text-sm text-blue-400 border-blue-500 hover:bg-blue-900/30 font-bold bg-slate-700">Бастапқы нүкте</button>
+                            <button onclick="setBrush('end')" id="brush-end" class="action-btn py-2 px-3 rounded text-sm text-red-400 border-red-500 hover:bg-red-900/30">Соңғы нүкте</button>
+                            <button onclick="setBrush('wall')" id="brush-wall" class="action-btn py-2 px-3 rounded text-sm text-gray-400 border-gray-500 hover:bg-gray-800/50">Қабырға (Wall)</button>
+                            <button onclick="setBrush('erase')" id="brush-erase" class="action-btn py-2 px-3 rounded text-sm text-gray-400 border-gray-500 hover:bg-gray-800/50">Өшіру (Erase)</button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-2 pt-4 border-t border-slate-700">
+                        <button onclick="runAStar()" class="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 px-4 rounded shadow-lg transition-transform active:scale-95 fairy-font text-lg">
+                            Жолды табу
+                        </button>
+                        <button onclick="resetGrid()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded transition-transform active:scale-95">
+                            Тазалау
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="path-result" class="mt-4 text-center text-sm font-semibold h-6 text-yellow-400"></div>
+            </div>
+
+            <div class="flex-1 flex justify-center w-full">
+                <!-- 10x10 Grid -->
+                <div id="grid" class="w-full max-w-sm" onmousedown="isDrawing = true" onmouseup="isDrawing = false" onmouseleave="isDrawing = false">
+                    <!-- Cells will be generated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 2: MINIMAX BATTLE ==================== -->
+        <div id="battle-tab" class="tab-content hidden flex flex-col md:flex-row gap-6">
+            <div class="flex-1">
+                <h2 class="text-2xl mb-2">Айдаһармен шайқас</h2>
+                <p class="text-sm text-gray-400 mb-6">
+                    Кезекпен жүретін тактикалық шайқас. Жау <span class="text-yellow-400 font-bold">Minimax алгоритмі</span> арқылы 3 қадам алға есептеп, өзіне ең тиімді шешім қабылдайды.
+                </p>
+
+                <div class="bg-slate-900 border border-slate-700 p-4 rounded-xl shadow-inner mb-6 relative">
+                    <!-- Player Stats -->
+                    <div class="mb-4">
+                        <div class="flex justify-between mb-1">
+                            <span class="font-bold text-blue-300">Ер Төстік (Сіз) <span id="p-def-badge" class="hidden text-xs bg-blue-800 px-1 rounded ml-1">Қорғаныста</span></span>
+                            <span id="player-hp-txt" class="font-bold">50 / 50 HP</span>
+                        </div>
+                        <div class="hp-bar-container">
+                            <div id="player-hp-bar" class="hp-bar hp-player w-full"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center font-bold text-gray-500 my-2 text-sm">VS</div>
+
+                    <!-- Dragon Stats -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="font-bold text-red-400">Айдаһар (Minimax AI) <span id="d-def-badge" class="hidden text-xs bg-red-800 px-1 rounded ml-1">Қорғаныста</span></span>
+                            <span id="dragon-hp-txt" class="font-bold">50 / 50 HP</span>
+                        </div>
+                        <div class="hp-bar-container">
+                            <div id="dragon-hp-bar" class="hp-bar hp-dragon w-full"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <button id="btn-attack" onclick="playerAction('attack')" class="action-btn py-3 rounded font-bold text-sm">⚔️ Шабуыл</button>
+                    <button id="btn-defend" onclick="playerAction('defend')" class="action-btn py-3 rounded font-bold text-sm">🛡️ Қорғану</button>
+                    <button id="btn-heal" onclick="playerAction('heal')" class="action-btn py-3 rounded font-bold text-sm">🧪 Емделу</button>
+                </div>
+                
+                <div class="mt-4 text-center">
+                    <button onclick="resetBattle()" class="text-sm text-gray-400 hover:text-white underline decoration-dotted">Жаңа шайқас бастау</button>
+                </div>
+            </div>
+
+            <!-- Battle Log -->
+            <div class="flex-1 bg-black/40 border border-slate-700 rounded-xl p-4 flex flex-col">
+                <h3 class="text-lg mb-3 border-b border-slate-700 pb-2">Шайқас журналы</h3>
+                <div id="battle-log" class="battle-log flex-1 overflow-y-auto space-y-2 text-sm max-h-[350px]">
+                    <div class="text-gray-400 italic">Шайқас басталды! Сіздің кезегіңіз.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 3: LLM CHAT ==================== -->
+        <div id="chat-tab" class="tab-content hidden flex flex-col h-[500px]">
+            <h2 class="text-2xl mb-2">Дана қариядан ақыл сұрау</h2>
+            <p class="text-sm text-gray-400 mb-4">
+                <span class="text-yellow-400 font-bold">Generative AI (Gemini)</span> арқылы жұмыс істейтін көмекші. Ол қазақ фольклорының стилінде жауап береді.
+            </p>
+
+            <div id="chat-history" class="flex-1 bg-slate-900 border border-slate-700 rounded-t-xl p-4 overflow-y-auto space-y-4 battle-log">
+                <div class="flex items-start gap-3">
+                    <div class="text-2xl">👴</div>
+                    <div class="chat-bubble-ai p-3 text-sm max-w-[85%] text-gray-100">
+                        Аманбысың, балам Ер Төстік! Жер асты патшалығына сапарың оңай емес екенін білемін. Қандай ақыл-кеңес керек, сұрай бер.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2 bg-slate-800 border border-t-0 border-slate-700 rounded-b-xl p-3">
+                <input type="text" id="chat-input" placeholder="Сұрағыңызды жазыңыз..." class="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-yellow-500 text-white placeholder-gray-500 transition-colors" onkeypress="handleChatEnter(event)">
+                <button onclick="sendChatMessage()" class="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition-colors w-10 h-10 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- UI Message Modal -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center hidden z-50 transition-opacity">
+        <div class="bg-slate-800 border border-yellow-600 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl text-center transform scale-95 transition-transform" id="modal-content">
+            <h2 id="modal-title" class="text-2xl font-bold mb-3 fairy-font text-yellow-400">Хабарлама</h2>
+            <p id="modal-text" class="mb-6 text-gray-300">Мәтін осында болады</p>
+            <button onclick="closeModal()" class="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-6 rounded">Жабу</button>
+        </div>
+    </div>
+
+    <script>
+        /* ==================== GLOBAL UTILS ==================== */
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-slate-700');
+                if (btn.id === `btn-${tabId}`) btn.classList.add('active', 'bg-slate-700');
+            });
+            document.getElementById(tabId).classList.remove('hidden');
+        }
+
+        function showMessage(title, text) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-text').innerText = text;
+            const backdrop = document.getElementById('modal-backdrop');
+            backdrop.classList.remove('hidden');
+            setTimeout(() => {
+                document.getElementById('modal-content').classList.remove('scale-95');
+                document.getElementById('modal-content').classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            document.getElementById('modal-content').classList.add('scale-95');
+            setTimeout(() => {
+                document.getElementById('modal-backdrop').classList.add('hidden');
+            }, 200);
+        }
+
+        /* ==================== FEATURE 1: A* ALGORITHM ==================== */
+        const GRID_SIZE = 10;
+        let grid = [];
+        let startNode = { x: 0, y: 0 };
+        let endNode = { x: 9, y: 9 };
+        let currentBrush = 'wall';
+        let isDrawing = false;
+        
+        function initGrid() {
+            const gridContainer = document.getElementById('grid');
+            gridContainer.innerHTML = '';
+            grid = [];
+            for (let y = 0; y < GRID_SIZE; y++) {
+                let row = [];
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+                    
+                    if (x === startNode.x && y === startNode.y) cell.classList.add('start');
+                    if (x === endNode.x && y === endNode.y) cell.classList.add('end');
+
+                    // Event Listeners for drawing
+                    cell.addEventListener('mousedown', () => handleCellInteraction(x, y));
+                    cell.addEventListener('mouseenter', () => { if (isDrawing) handleCellInteraction(x, y); });
+                    
+                    gridContainer.appendChild(cell);
+                    row.push({ x, y, type: (x === startNode.x && y === startNode.y) ? 'start' : (x === endNode.x && y === endNode.y) ? 'end' : 'empty' });
+                }
+                grid.push(row);
+            }
+            updateBrushUI();
+        }
+
+        function setBrush(brushType) {
+            currentBrush = brushType;
+            updateBrushUI();
+        }
+
+        function updateBrushUI() {
+            const brushes = ['start', 'end', 'wall', 'erase'];
+            brushes.forEach(b => {
+                document.getElementById(`brush-${b}`).classList.remove('bg-slate-700', 'border-yellow-500');
+                if (b === currentBrush) document.getElementById(`brush-${b}`).classList.add('bg-slate-700');
+            });
+        }
+
+        function handleCellInteraction(x, y) {
+            const node = grid[y][x];
+            if (currentBrush === 'start') {
+                grid[startNode.y][startNode.x].type = 'empty';
+                startNode = { x, y };
+                node.type = 'start';
+            } else if (currentBrush === 'end') {
+                grid[endNode.y][endNode.x].type = 'empty';
+                endNode = { x, y };
+                node.type = 'end';
+            } else if (currentBrush === 'wall' && node.type === 'empty') {
+                node.type = 'wall';
+            } else if (currentBrush === 'erase') {
+                if (node.type === 'wall' || node.type === 'path' || node.type === 'searched') {
+                    node.type = 'empty';
+                }
+            }
+            renderGrid();
+        }
+
+        function renderGrid() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                const x = parseInt(cell.dataset.x);
+                const y = parseInt(cell.dataset.y);
+                const type = grid[y][x].type;
+                cell.className = 'cell';
+                if (type !== 'empty') cell.classList.add(type);
+            });
+        }
+
+        function resetGrid() {
+            startNode = { x: 0, y: 0 };
+            endNode = { x: 9, y: 9 };
+            initGrid();
+            document.getElementById('path-result').innerText = '';
+        }
+
+        // A* Algorithm Logic
+        function heuristic(a, b) {
+            return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+        }
+
+        function runAStar() {
+            // Clean previous paths
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (grid[y][x].type === 'path' || grid[y][x].type === 'searched') {
+                        grid[y][x].type = 'empty';
+                    }
+                }
+            }
+            renderGrid();
+            document.getElementById('path-result').innerText = 'Есептелуде...';
+
+            let openSet = [ { x: startNode.x, y: startNode.y, g: 0, h: heuristic(startNode, endNode), f: heuristic(startNode, endNode), parent: null } ];
+            let closedSet = new Set();
+            
+            function getNeighbors(node) {
+                const dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // Top, Right, Bottom, Left
+                let neighbors = [];
+                for (let [dx, dy] of dirs) {
+                    const nx = node.x + dx;
+                    const ny = node.y + dy;
+                    if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && grid[ny][nx].type !== 'wall') {
+                        neighbors.push({ x: nx, y: ny });
+                    }
+                }
+                return neighbors;
+            }
+
+            let foundNode = null;
+            
+            // Allow JS event loop to visually show some progress if we wanted to animate, 
+            // but for simplicity and responsiveness in 10x10, synchronous execution is instant.
+            while (openSet.length > 0) {
+                // Get node with lowest f
+                openSet.sort((a, b) => a.f - b.f);
+                let current = openSet.shift();
+
+                if (current.x === endNode.x && current.y === endNode.y) {
+                    foundNode = current;
+                    break;
+                }
+
+                closedSet.add(`${current.x},${current.y}`);
+                
+                // Visual flare for searched nodes (don't overwrite start/end)
+                if ((current.x !== startNode.x || current.y !== startNode.y) && 
+                    (current.x !== endNode.x || current.y !== endNode.y)) {
+                    grid[current.y][current.x].type = 'searched';
+                }
+
+                let neighbors = getNeighbors(current);
+                for (let n of neighbors) {
+                    if (closedSet.has(`${n.x},${n.y}`)) continue;
+                    
+                    let tentative_g = current.g + 1;
+                    
+                    let existingOpen = openSet.find(o => o.x === n.x && o.y === n.y);
+                    if (!existingOpen) {
+                        openSet.push({
+                            x: n.x, y: n.y, 
+                            g: tentative_g, 
+                            h: heuristic(n, endNode), 
+                            f: tentative_g + heuristic(n, endNode),
+                            parent: current
+                        });
+                    } else if (tentative_g < existingOpen.g) {
+                        existingOpen.g = tentative_g;
+                        existingOpen.f = existingOpen.g + existingOpen.h;
+                        existingOpen.parent = current;
+                    }
+                }
+            }
+
+            if (foundNode) {
+                // Reconstruct path
+                let path = [];
+                let curr = foundNode.parent;
+                while (curr && curr.parent) { // don't color start node
+                    path.push(curr);
+                    curr = curr.parent;
+                }
+                
+                // Animation effect
+                document.getElementById('path-result').innerText = `Жол табылды! (Ұзындығы: ${path.length + 1} қадам)`;
+                
+                let delay = 0;
+                path.reverse().forEach(p => {
+                    setTimeout(() => {
+                        grid[p.y][p.x].type = 'path';
+                        renderGrid();
+                    }, delay);
+                    delay += 50;
+                });
+                
+            } else {
+                document.getElementById('path-result').innerHTML = '<span class="text-red-400">Жол жоқ! Айдаһардың қабырғалары жолды жауып тастады.</span>';
+                renderGrid(); // show searched areas
+            }
+        }
+
+        // Initialize Tab 1
+        initGrid();
+
+        /* ==================== FEATURE 2: MINIMAX ALGORITHM ==================== */
+        const MAX_HP = 50;
+        let gameState = {
+            pHP: MAX_HP,
+            dHP: MAX_HP,
+            pDef: false,
+            dDef: false,
+            isGameOver: false
+        };
+
+        const battleRules = {
+            attackDamage: 12,
+            healAmount: 10,
+            defendMultiplier: 0.3 // Reduces damage by 70%
+        };
+
+        function resetBattle() {
+            gameState = { pHP: MAX_HP, dHP: MAX_HP, pDef: false, dDef: false, isGameOver: false };
+            document.getElementById('battle-log').innerHTML = '<div class="text-gray-400 italic">Жаңа шайқас басталды! Сіздің кезегіңіз.</div>';
+            updateBattleUI();
+            toggleActionButtons(false);
+        }
+
+        function updateBattleUI() {
+            document.getElementById('player-hp-txt').innerText = `${Math.max(0, gameState.pHP)} / ${MAX_HP} HP`;
+            document.getElementById('player-hp-bar').style.width = `${(Math.max(0, gameState.pHP) / MAX_HP) * 100}%`;
+            document.getElementById('p-def-badge').style.display = gameState.pDef ? 'inline-block' : 'none';
+
+            document.getElementById('dragon-hp-txt').innerText = `${Math.max(0, gameState.dHP)} / ${MAX_HP} HP`;
+            document.getElementById('dragon-hp-bar').style.width = `${(Math.max(0, gameState.dHP) / MAX_HP) * 100}%`;
+            document.getElementById('d-def-badge').style.display = gameState.dDef ? 'inline-block' : 'none';
+        }
+
+        function logBattle(msg, type = 'neutral') {
+            const logEl = document.getElementById('battle-log');
+            const div = document.createElement('div');
+            div.className = `p-2 rounded bg-opacity-20 border-l-2 ${
+                type === 'player' ? 'bg-blue-900 border-blue-500 text-blue-200' : 
+                type === 'dragon' ? 'bg-red-900 border-red-500 text-red-200' : 'bg-gray-800 border-gray-500 text-gray-300'
+            }`;
+            div.innerHTML = msg;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function toggleActionButtons(disabled) {
+            document.getElementById('btn-attack').disabled = disabled;
+            document.getElementById('btn-defend').disabled = disabled;
+            document.getElementById('btn-heal').disabled = disabled;
+        }
+
+        // Simulates a turn and returns a NEW state object (crucial for Minimax)
+        function simulateAction(state, actor, action) {
+            let next = { ...state };
+            if (actor === 'player') {
+                if (action === 'attack') {
+                    let dmg = next.dDef ? Math.floor(battleRules.attackDamage * battleRules.defendMultiplier) : battleRules.attackDamage;
+                    next.dHP -= dmg;
+                    next.pDef = false; // Attacking drops defense
+                } else if (action === 'defend') {
+                    next.pDef = true;
+                } else if (action === 'heal') {
+                    next.pHP = Math.min(MAX_HP, next.pHP + battleRules.healAmount);
+                    next.pDef = false;
+                }
+            } else { // dragon
+                if (action === 'attack') {
+                    let dmg = next.pDef ? Math.floor(battleRules.attackDamage * battleRules.defendMultiplier) : battleRules.attackDamage;
+                    next.pHP -= dmg;
+                    next.dDef = false;
+                } else if (action === 'defend') {
+                    next.dDef = true;
+                } else if (action === 'heal') {
+                    next.dHP = Math.min(MAX_HP, next.dHP + battleRules.healAmount);
+                    next.dDef = false;
+                }
+            }
+            return next;
+        }
+
+        function checkWin(state) {
+            if (state.pHP <= 0) return 'dragon';
+            if (state.dHP <= 0) return 'player';
+            return null;
+        }
+
+        async function playerAction(action) {
+            if (gameState.isGameOver) return;
+            
+            toggleActionButtons(true);
+            
+            // Execute player action
+            let msg = '';
+            if (action === 'attack') {
+                let dmg = gameState.dDef ? Math.floor(battleRules.attackDamage * battleRules.defendMultiplier) : battleRules.attackDamage;
+                msg = `Ер Төстік шабуыл жасап, Айдаһарға <span class="font-bold text-yellow-400">${dmg}</span> нұқсан келтірді!`;
+            } else if (action === 'defend') {
+                msg = `Ер Төстік қалқанын көтеріп, қорғанысқа көшті.`;
+            } else if (action === 'heal') {
+                msg = `Ер Төстік сиқырлы бұлақ суын ішіп, <span class="text-green-400">+${battleRules.healAmount} HP</span> қалпына келтірді.`;
+            }
+            gameState = simulateAction(gameState, 'player', action);
+            logBattle(msg, 'player');
+            updateBattleUI();
+
+            let winner = checkWin(gameState);
+            if (winner) {
+                endBattle(winner);
+                return;
+            }
+
+            // Dragon's turn (Minimax)
+            logBattle("<em>Айдаһар ойлануда... (Minimax AI)</em>", 'neutral');
+            
+            setTimeout(() => {
+                dragonTurn();
+            }, 1000);
+        }
+
+        // Minimax implementation (Depth 4)
+        function minimax(state, depth, isMaximizingPlayer) {
+            let winner = checkWin(state);
+            if (winner === 'dragon') return 1000 + depth; // Favor faster wins
+            if (winner === 'player') return -1000 - depth;
+            if (depth === 0) {
+                // Evaluation Function: Dragon HP - Player HP. 
+                // Small penalty if dragon has lower health to encourage healing.
+                let eval = state.dHP - state.pHP;
+                if (state.dHP < 15) eval -= 10; 
+                return eval;
+            }
+
+            const actions = ['attack', 'defend', 'heal'];
+
+            if (isMaximizingPlayer) { // Dragon's turn
+                let bestVal = -Infinity;
+                for (let action of actions) {
+                    let nextState = simulateAction(state, 'dragon', action);
+                    let value = minimax(nextState, depth - 1, false);
+                    bestVal = Math.max(bestVal, value);
+                }
+                return bestVal;
+            } else { // Player's turn
+                let bestVal = Infinity;
+                for (let action of actions) {
+                    let nextState = simulateAction(state, 'player', action);
+                    let value = minimax(nextState, depth - 1, true);
+                    bestVal = Math.min(bestVal, value);
+                }
+                return bestVal;
+            }
+        }
+
+        function dragonTurn() {
+            const actions = ['attack', 'defend', 'heal'];
+            let bestVal = -Infinity;
+            let bestAction = 'attack';
+            
+            // Introduce a slight randomness if scores are completely tied to prevent infinite identical loops
+            // But fundamentally it evaluates based on Minimax
+            let scoredActions = [];
+
+            for (let action of actions) {
+                // Don't heal if full health
+                if (action === 'heal' && gameState.dHP === MAX_HP) continue;
+                
+                let nextState = simulateAction(gameState, 'dragon', action);
+                let moveVal = minimax(nextState, 4, false); // Depth 4
+                scoredActions.push({ action, score: moveVal });
+            }
+
+            // Sort descending
+            scoredActions.sort((a, b) => b.score - a.score);
+            bestAction = scoredActions[0].action;
+
+            // Execute Dragon action
+            let msg = '';
+            if (bestAction === 'attack') {
+                let dmg = gameState.pDef ? Math.floor(battleRules.attackDamage * battleRules.defendMultiplier) : battleRules.attackDamage;
+                msg = `Айдаһар от шашып, сізге <span class="font-bold text-red-400">${dmg}</span> нұқсан келтірді!`;
+            } else if (bestAction === 'defend') {
+                msg = `Айдаһар қанаттарымен тұмшаланып, қорғанысқа көшті.`;
+            } else if (bestAction === 'heal') {
+                msg = `Айдаһар сиқырмен өзін емдеп, <span class="text-green-400">+${battleRules.healAmount} HP</span> қалпына келтірді.`;
+            }
+
+            gameState = simulateAction(gameState, 'dragon', bestAction);
+            logBattle(msg, 'dragon');
+            updateBattleUI();
+
+            let winner = checkWin(gameState);
+            if (winner) {
+                endBattle(winner);
+            } else {
+                toggleActionButtons(false);
+                logBattle("<em>Сіздің кезегіңіз.</em>", 'neutral');
+            }
+        }
+
+        function endBattle(winner) {
+            gameState.isGameOver = true;
+            toggleActionButtons(true);
+            if (winner === 'player') {
+                logBattle("<strong>Жеңіс! Сіз Айдаһарды тізе бүктірдіңіз!</strong>", 'player');
+                showMessage("Жеңіс!", "Жарайсың, Ер Төстік! Сен Айдаһарды жеңдің.");
+            } else {
+                logBattle("<strong>Жеңіліс! Айдаһар сізді жеңді.</strong>", 'dragon');
+                showMessage("Жеңіліс", "Айдаһардың күші басым түсті. Қайта бақ сынап көріңіз.");
+            }
+        }
+
+        /* ==================== FEATURE 3: LLM CHAT (GEMINI API) ==================== */
+        // Provided by system rules: leave as empty string
+        const API_KEY = ""; 
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`;
+        
+        let chatHistoryMemory = [
+            {
+                role: "user",
+                parts: [{ text: "Сен қазақ ертегілеріндегі Дана қариясың. Мен Ер Төстікпін. Сен маған тек қазақ тілінде, ертегі стилінде қысқа әрі нұсқа (1-2 сөйлем) жауап беруің керек. Амандасып, қысқаша көмегіңді ұсын." }]
+            },
+            {
+                role: "model",
+                parts: [{ text: "Аманбысың, балам Ер Төстік! Жер асты патшалығына сапарың оңай емес екенін білемін. Қандай ақыл-кеңес керек, сұрай бер." }]
+            }
+        ];
+
+        function handleChatEnter(e) {
+            if (e.key === 'Enter') sendChatMessage();
+        }
+
+        async function sendChatMessage() {
+            const inputEl = document.getElementById('chat-input');
+            const text = inputEl.value.trim();
+            if (!text) return;
+
+            // Render user message
+            renderChatMessage(text, 'user');
+            inputEl.value = '';
+            inputEl.disabled = true;
+
+            // Add to memory
+            chatHistoryMemory.push({ role: "user", parts: [{ text: text }] });
+
+            // Show typing indicator
+            const typingId = renderTypingIndicator();
+            const chatContainer = document.getElementById('chat-history');
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            try {
+                // Exponential backoff logic wrapper
+                const response = await fetchWithRetry(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: chatHistoryMemory,
+                        systemInstruction: {
+                            parts: [{ text: "Act as a wise elder from Kazakh folklore. Speak only in Kazakh, in a poetic, fairytale style. Keep answers very short (1-3 sentences). Help Er Tostik on his quest." }]
+                        }
+                    })
+                });
+
+                document.getElementById(typingId).remove();
+
+                const result = await response.json();
+                if (result.candidates && result.candidates[0].content) {
+                    const aiText = result.candidates[0].content.parts[0].text;
+                    renderChatMessage(aiText, 'ai');
+                    chatHistoryMemory.push({ role: "model", parts: [{ text: aiText }] });
+                } else {
+                    throw new Error("Invalid API response format");
+                }
+            } catch (error) {
+                document.getElementById(typingId).remove();
+                console.error(error); // Silently log as per instructions, but show user feedback
+                renderChatMessage("<em>Кешір балам, сиқырлы байланыс үзіліп қалды. Қайта сұрап көрші...</em>", 'ai');
+                // Remove the last user message from memory if it failed, so context isn't broken
+                chatHistoryMemory.pop();
+            } finally {
+                inputEl.disabled = false;
+                inputEl.focus();
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+        }
+
+        function renderChatMessage(text, sender) {
+            const chatHistory = document.getElementById('chat-history');
+            const wrapper = document.createElement('div');
+            
+            if (sender === 'user') {
+                wrapper.className = "flex items-start gap-3 justify-end";
+                wrapper.innerHTML = `
+                    <div class="chat-bubble-user p-3 text-sm max-w-[85%] text-gray-100 shadow-lg">${text}</div>
+                    <div class="text-2xl mt-1">👦</div>
+                `;
+            } else {
+                wrapper.className = "flex items-start gap-3";
+                wrapper.innerHTML = `
+                    <div class="text-2xl mt-1">👴</div>
+                    <div class="chat-bubble-ai p-3 text-sm max-w-[85%] text-gray-100 shadow-lg">${text}</div>
+                `;
+            }
+            
+            chatHistory.appendChild(wrapper);
+        }
+
+        function renderTypingIndicator() {
+            const chatHistory = document.getElementById('chat-history');
+            const id = 'typing-' + Date.now();
+            const wrapper = document.createElement('div');
+            wrapper.id = id;
+            wrapper.className = "flex items-start gap-3";
+            wrapper.innerHTML = `
+                <div class="text-2xl mt-1">👴</div>
+                <div class="chat-bubble-ai p-4 flex items-center typing-indicator shadow-lg">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            chatHistory.appendChild(wrapper);
+            return id;
+        }
+
+        // Exponential backoff fetch function
+        async function fetchWithRetry(url, options, maxRetries = 3) {
+            let delay = 1000;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        if (response.status === 429 && i < maxRetries - 1) { // Rate limit
+                            // Wait and retry
+                            await new Promise(res => setTimeout(res, delay));
+                            delay *= 2;
+                            continue; 
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response;
+                } catch (e) {
+                    if (i === maxRetries - 1) throw e;
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
